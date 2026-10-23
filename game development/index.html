@@ -1,1 +1,97 @@
-#index.html
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MyBear</title>
+    <style>
+ body {
+  margin: 0;
+  padding: 32px 20px;
+  min-height: 100vh;
+  box-sizing: border-box;
+  background:
+    radial-gradient(ellipse at 75% 65%, #665650 0%, transparent 48%),
+    linear-gradient(135deg, #303a44 0%, #46515b 48%, #25292c 100%);
+  color: #ffffff;
+  font-family: Arial, sans-serif;
+  text-align: center;
+}
+
+ .workspace {
+  width: min(1400px, calc(100% - 48px));
+  min-height: calc(100vh - 220px);
+  margin: 30px auto;
+  display: grid;
+  grid-template-columns: 1.5fr 1fr;
+  gap: 24px;
+  align-items: stretch;
+}
+
+ .preview {
+  min-height: 520px;
+  padding: 20px;
+  background: #ffffff;
+  border: 1px solid #deded6;
+  border-radius: 16px;
+  margin-top: 0;
+}
+
+  .bear-placeholder {
+    height: 330px;
+    display: grid;
+    place-items: center;
+    color: #829089;
+    background: #f3f1eb;
+    border-radius: 12px;
+  }
+
+  .fabric-library {
+    margin-top: 0px;
+    padding: 20px;
+    background: #ffffff;
+    border: 1px solid #deded6;
+    border-radius: 16px;
+  }
+
+  .fabric-list {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+  }
+
+  .fabric-list button {
+    padding: 12px 20px;
+    border: 1px solid #c7d0c8;
+    border-radius: 10px;
+    background: #f7f4ec;
+    color: #30483b;
+    cursor: pointer;
+  }
+.preview-message {
+  color: #829089;
+  margin-top: 120px;
+}
+</style>
+</head>
+<body>
+  <h1>MyBear</h1>
+  <p>Choose fabrics for your bear</p>
+
+  <main class="workspace">
+    <section class="preview">
+      <h2>Bear Preview</h2>
+      <p class="preview-message">Your bear will appear here</p>
+    </section>
+
+    <section class="fabric-library">
+      <h2>Choose Your Fabrics</h2>
+      <div class="fabric-list">
+        <button>Fabric 1</button>
+        <button>Fabric 2</button>
+        <button>Fabric 3</button>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
