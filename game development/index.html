@@ -38,15 +38,17 @@
   margin-top: 0;
 }
 .preview {
+  min-height: 520px;
+  padding: 0;
+  background: transparent;
+  border: none;
   display: flex;
-  flex-direction: column;
 }
 
 .preview model-viewer {
   width: 100%;
-  flex: 1;
-  min-height: 420px;
-  height: auto;
+  height: 100%;
+  min-height: 520px;
 }
 
   .bear-placeholder {
@@ -89,18 +91,13 @@
 <body>
   <h1>MyBear</h1>
   <main class="workspace">
-   <section class="preview">
-  <h2>Bear Preview</h2>
-  <p>Viewer test</p>
+ <section class="preview">
   <model-viewer
     src="../assets/teddy_bear.glb"
     alt="A 3D teddy bear"
     camera-controls
     auto-rotate
-    shadow-intensity="1"
-    camera-orbit="0deg 75deg 3m"
-    field-of-view="35deg"
-    >
+    shadow-intensity="1">
   </model-viewer>
 </section>
 
