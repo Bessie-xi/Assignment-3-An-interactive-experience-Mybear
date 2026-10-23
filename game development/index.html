@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MyBear</title>
+   <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
     <style>
  body {
   margin: 0;
@@ -35,6 +36,17 @@
   border: 1px solid #deded6;
   border-radius: 16px;
   margin-top: 0;
+}
+.preview {
+  display: flex;
+  flex-direction: column;
+}
+
+.preview model-viewer {
+  width: 100%;
+  flex: 1;
+  min-height: 420px;
+  height: auto;
 }
 
   .bear-placeholder {
@@ -76,13 +88,21 @@
 </head>
 <body>
   <h1>MyBear</h1>
-  <p>Choose fabrics for your bear</p>
-
   <main class="workspace">
-    <section class="preview">
-      <h2>Bear Preview</h2>
-      <p class="preview-message">Your bear will appear here</p>
-    </section>
+   <section class="preview">
+  <h2>Bear Preview</h2>
+  <p>Viewer test</p>
+  <model-viewer
+    src="../assets/teddy_bear.glb"
+    alt="A 3D teddy bear"
+    camera-controls
+    auto-rotate
+    shadow-intensity="1"
+    camera-orbit="0deg 75deg 3m"
+    field-of-view="35deg"
+    >
+  </model-viewer>
+</section>
 
     <section class="fabric-library">
       <h2>Choose Your Fabrics</h2>
