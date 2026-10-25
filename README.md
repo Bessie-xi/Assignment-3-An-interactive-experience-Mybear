@@ -56,8 +56,8 @@ http://localhost:8080
 
 ## Credits
 
-- Bear model: [Add the creator, source link, and license]
-- Plaid background: [Add the source and license]
+- Bear model: [https://sketchfab.com/3d-models/teddy-bear-9c7081efd187447da9a333f89ea43f80]
+- Plaid background: [Printest]
 - Scary image: Made with OpenAI’s image generation tool.
 - Piano music: Generated with Runway.
 - See [PROCESS.md](./PROCESS.md) for how AI helped with the project.
