@@ -4,110 +4,72 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MyBear</title>
-   <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
-    <style>
- body {
-  margin: 0;
-  padding: 32px 20px;
-  min-height: 100vh;
-  box-sizing: border-box;
-  background:
-    radial-gradient(ellipse at 75% 65%, #665650 0%, transparent 48%),
-    linear-gradient(135deg, #303a44 0%, #46515b 48%, #25292c 100%);
-  color: #ffffff;
-  font-family: Arial, sans-serif;
-  text-align: center;
-}
 
- .workspace {
-  width: min(1400px, calc(100% - 48px));
-  min-height: calc(100vh - 220px);
-  margin: 30px auto;
-  display: grid;
-  grid-template-columns: 1.5fr 1fr;
-  gap: 24px;
-  align-items: stretch;
-}
+  <script
+    type="module"
+    src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js">
+  </script>
 
- .preview {
-  min-height: 520px;
-  padding: 20px;
-  background: #ffffff;
-  border: 1px solid #deded6;
-  border-radius: 16px;
-  margin-top: 0;
-}
-.preview {
-  min-height: 520px;
-  padding: 0;
-  background: transparent;
-  border: none;
-  display: flex;
-}
+  <style>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      min-height: 100dvh;
+      box-sizing: border-box;
+      padding: 24px 20px;
+      display: flex;
+      flex-direction: column;
+      background:
+        radial-gradient(ellipse at 75% 65%, #665650 0%, transparent 48%),
+        linear-gradient(135deg, #303a44 0%, #46515b 48%, #25292c 100%);
+      color: #ffffff;
+      font-family: Arial, sans-serif;
+      text-align: center;
+    }
 
-.preview model-viewer {
-  width: 100%;
-  height: 100%;
-  min-height: 520px;
-}
+    h1 {
+      margin: 0 0 16px;
+      font-size: 36px;
+    }
 
-  .bear-placeholder {
-    height: 330px;
-    display: grid;
-    place-items: center;
-    color: #829089;
-    background: #f3f1eb;
-    border-radius: 12px;
-  }
+    .workspace {
+      flex: 1;
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
 
-  .fabric-library {
-    margin-top: 0px;
-    padding: 20px;
-    background: #ffffff;
-    border: 1px solid #deded6;
-    border-radius: 16px;
-  }
+    .preview {
+      width: 100%;
+      max-width: 1000px;
+    }
 
-  .fabric-list {
-    display: flex;
-    justify-content: center;
-    gap: 12px;
-  }
-
-  .fabric-list button {
-    padding: 12px 20px;
-    border: 1px solid #c7d0c8;
-    border-radius: 10px;
-    background: #f7f4ec;
-    color: #30483b;
-    cursor: pointer;
-  }
-.preview-message {
-  color: #829089;
-  margin-top: 120px;
-}
-</style>
+    model-viewer {
+      display: block;
+      width: 100%;
+      height: calc(100vh - 120px);
+      height: calc(100dvh - 120px);
+      min-height: 320px;
+      background: transparent;
+    }
+  </style>
 </head>
+
 <body>
   <h1>MyBear</h1>
-  <main class="workspace">
- <section class="preview">
-  <model-viewer
-    src="../assets/teddy_bear.glb"
-    alt="A 3D teddy bear"
-    camera-controls
-    auto-rotate
-    shadow-intensity="1">
-  </model-viewer>
-</section>
 
-    <section class="fabric-library">
-      <h2>Choose Your Fabrics</h2>
-      <div class="fabric-list">
-        <button>Fabric 1</button>
-        <button>Fabric 2</button>
-        <button>Fabric 3</button>
-      </div>
+  <main class="workspace">
+    <section class="preview">
+     <model-viewer
+  src="../assets/teddy_bear.glb"
+  alt="一只可旋转查看的 3D 小熊"
+  camera-controls
+  disable-zoom
+  disable-pan
+  auto-rotate
+  shadow-intensity="1">
+</model-viewer>
     </section>
   </main>
 </body>
