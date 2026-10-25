@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MyBear</title>
   <link rel="preload" as="audio" href="./assets/mybear-piano.mp3" type="audio/mpeg">
-  <link rel="preload" as="audio" href="./assets/mybear-no.mp3" type="audio/mpeg">
   <script
   type="module"
   src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js">
@@ -28,7 +27,7 @@
     #speech.tail-right .speech-frame { transform:scaleX(-1); }
     @media (max-width:480px) { #speech { width:210px; font-size:14px; padding:23px 22px 35px; min-height:120px; } }
     @media (prefers-reduced-motion:reduce) { #speech { transition:none; } }
-/* 连点触发的异常画面 */
+
 #prank {
   position: fixed;
   inset: 0;
@@ -54,7 +53,6 @@ top: -100px;
   animation: frantic-shake 60ms steps(1) infinite;
 }
 
-/* 电视噪点 */
 #prank::before {
   content: "";
   position: absolute;
@@ -66,7 +64,6 @@ top: -100px;
   animation: tv-noise 80ms steps(1) infinite;
 }
 
-/* 彩色干扰线和扫描线 */
 #prank::after {
   content: "";
   position: absolute;
@@ -131,6 +128,19 @@ top: -100px;
 #bear-choices button:focus-visible { outline:3px solid #ae7777; outline-offset:3px; }
 #ending { position:fixed; inset:0; display:grid; place-items:center; padding:32px; text-align:center; font:700 clamp(18px,3vw,30px)/1.8 'Courier New',monospace; color:#493c39; }
 body.story-ended .workspace, body.story-ended #speech, body.story-ended #sound-toggle, body.story-ended #prank { display:none !important; }
+
+#bear-choices {
+  position:fixed; left:50%; bottom:max(24px, env(safe-area-inset-bottom));
+  transform:translateX(-50%); z-index:50;
+  width:min(300px, calc(100vw - 48px)); box-sizing:border-box;
+  margin:0; padding:12px; background:#fffaf3;
+  border:3px solid #493c39; box-shadow:5px 5px 0 #d5bcb3;
+  pointer-events:auto;
+}
+#bear-choices[hidden] { display:none !important; }
+body.story-ended #bear-choices { display:none !important; }
+model-viewer { opacity:1; transition:opacity 900ms ease; }
+model-viewer.farewell-fade { opacity:0; pointer-events:none; }
 </style>
 </head>
 <body>
@@ -146,7 +156,7 @@ body.story-ended .workspace, body.story-ended #speech, body.story-ended #sound-t
   <main class="workspace">
     <section class="preview">
       <model-viewer id="bear"
-        src="./assets/teddy_bear_complete.glb"
+        src="./assets/teddy_bear_complete.glb?v=final3"
         alt="一只可以点击头、耳朵、鼻子、肚子、手和腿的互动玩具小熊"
         camera-controls disable-zoom disable-pan disable-tap
         auto-rotate autoplay animation-name="BearIdle"
@@ -163,11 +173,12 @@ body.story-ended .workspace, body.story-ended #speech, body.story-ended #sound-t
       <path d="M24 4 H296 V12 H308 V24 H316 V116 H308 V128 H296 V136 H102 V144 H90 V156 H78 V144 H66 V136 H24 V128 H12 V116 H4 V24 H12 V12 H24 Z" fill="#fffdf9" stroke="#493c39" stroke-width="6" stroke-linejoin="miter"/>
     </svg>
     <span id="speech-text"></span>
+
+  </div>
     <div id="bear-choices" hidden role="group" aria-label="Will you be gentle?">
       <button id="choice-yes" type="button">Yes</button>
       <button id="choice-no" type="button">No</button>
     </div>
-  </div>
   <div id="ending" hidden role="status" aria-live="polite"></div>
   <script type="module">
 const bear = document.querySelector('#bear');
@@ -176,18 +187,12 @@ const bubble = document.querySelector('#speech');
 const speechText = document.querySelector('#speech-text');
 const overlay = document.querySelector('#prank');
 const prankImage = document.querySelector('#prank-image');
-
-// ===== 声音：钢琴背景、触碰 duang、逐字碎碎念、暗黑 NO =====
 class MyBearSound {
   constructor() {
     this.music = new Audio('./assets/mybear-piano.mp3');
     this.music.loop = true;
     this.music.preload = 'auto';
-    this.music.volume = 0.23;
-    this.no = new Audio('./assets/mybear-no.mp3');
-    this.no.preload = 'auto';
-    this.no.volume = 0.75;
-    this.no.preservesPitch = true;
+    this.music.volume = 0.08;
     this.enabled = true;
     this.ended = false;
     this.unlocked = false;
@@ -227,15 +232,7 @@ class MyBearSound {
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
     if (!this.context && AudioContextClass) this.context = new AudioContextClass();
     if (this.enabled && this.context?.state === 'suspended') this.context.resume().catch(() => {});
-    // 在用户手势内解锁嘶吼播放器，移动端之后也能使用。
     if (this.enabled && !this.scary) {
-      this.no.muted = true;
-      const playback = this.no.play();
-      if (playback) playback.then(() => {
-        // 不干扰稍后已经触发的 NO。
-        if (!this.scary) {this.no.pause(); this.no.currentTime = 0;}
-        this.no.muted = !this.enabled;
-      }).catch(() => {this.no.muted = !this.enabled;});
       this.playMusic();
     }
     this.updateButton();
@@ -261,7 +258,6 @@ class MyBearSound {
   }
   silence() {
     this.music.pause();
-    this.no.pause();
     this.stopSmallSounds();
   }
   canPlay() {
@@ -318,17 +314,10 @@ class MyBearSound {
     this.scary = true;
     this.music.pause();
     this.stopSmallSounds();
-    this.no.pause(); this.no.currentTime = 0;
     if (!this.enabled || !this.unlocked || document.hidden) return;
-    this.no.muted = false;
-    // 保持音高，将短促的 NO 放进图片停留的时间里。
-    const duration = Number.isFinite(this.no.duration) ? this.no.duration : 1.44;
-    this.no.playbackRate = Math.max(1, Math.min(3, duration / Math.max(.3, durationMs / 1000)));
-    this.no.play().catch(() => {});
+
   }
   leavePrank() {
-    // 图片消失后仍留出安静的停顿。
-    this.no.pause(); this.no.currentTime = 0;
   }
   finishRecovery() {
     if (this.ended) return;
@@ -337,21 +326,16 @@ class MyBearSound {
   }
 }
 const bearSound = new MyBearSound();
-
-
-// ===== 可调整的设置 =====
-const CLICK_WINDOW_MS = 2000;
+const CLICK_WINDOW_MS = 1000;
 const PRANK_CLICK_COUNT = 4;
 const PRANK_DURATION_MS = 800;
 const EXPLANATION_DELAY_MS = 600;
-const IDLE_DELAY_MS = 3000; // 保留你文件里设置的 3 秒。
+const IDLE_DELAY_MS = 3000;
 const TYPING_SPEED_MS = 45;
 const FADE_MS = 250;
 const FRONT_ANGLE_DEG = 90;
 const WELCOME_LINE = 'Hi, I am MyBear. Try to touch me!';
 const EXPLANATION_LINE = 'Oops, that was just a joke.';
-
-// ===== 小熊台词：以后只修改双引号里的文字即可 =====
 const BEAR_LINES = {
   head: [
     "My brain is super big, and it's all for thinking of you!",
@@ -395,15 +379,16 @@ const clickableParts = new Set([
   ...Object.keys(actions), 'HandsTouch', 'LegsTouch'
 ]);
 const requiredAnimations = [
-  'CryWait', 'ThankYou', 'BearIdle', 'HeadBounce', 'BellyBounce', 'EarLeftWiggle', 'EarRightWiggle',
+  'Angry', 'CryWait', 'ThankYou', 'BearIdle', 'HeadBounce', 'BellyBounce', 'EarLeftWiggle', 'EarRightWiggle',
   'Sneeze', 'HandLeftLift', 'HandRightLift', 'LegLeftShake', 'LegRightShake'
 ];
 let ready = false;
-let state = 'loading'; // loading / idle / reacting / prank / recovering
+let state = 'loading';
 let press = null;
 let clickTimes = [];
 let prankTimer = null;
 let recoveryTimer = null;
+let endingTimer = null;
 let idleTimer = null;
 let lastActivity = performance.now();
 let speechTimer = null;
@@ -412,9 +397,6 @@ let speechFrame = null;
 let speechVisible = false;
 let speechVersion = 0;
 const previousLines = {};
-
-// 鼠标悬停和拖动只由真实鼠标事件更新。
-// camera-change 只更新光标，绝不改变归正/自动旋转状态。
 let pointerPosition = null;
 let hoverSession = false;
 let dragging = false;
@@ -422,7 +404,7 @@ let cursorFrame = null;
 let lastMousePosition = null;
 
 function isBlocked() {
-  return !ready || ['warning','choosing','thanking','preparingPrank','prank','recovering','ended'].includes(state);
+  return !ready || ['warning','choosing','thanking','preparingPrank','prank','recovering','leaving','ended'].includes(state);
 }
 function hitMaterial(x, y) {
   if (!ready) return null;
@@ -435,8 +417,6 @@ function syncRotation() {
   if (bear.autoRotate !== shouldRotate) bear.autoRotate = shouldRotate;
 }
 function faceFront() {
-  // 自动旋转使用独立转台，不能只把摄像机设为固定 90 度。
-  // 保留转台当前位置，用它计算当前正面方向，避免重置转台时画面跳动。
   const orbit = bear.getCameraOrbit();
   const turntable = Number.isFinite(bear.turntableRotation) ? bear.turntableRotation : 0;
   const target = FRONT_ANGLE_DEG * Math.PI / 180 + turntable;
@@ -464,14 +444,12 @@ function playClip(name, once = true) {
   bear.play(once ? {repetitions:1} : {});
 }
 function returnToIdle() {
-  if (state === 'ended') return;
+  if (state === 'ended' || state === 'leaving') return;
   state = 'idle';
   playClip('BearIdle', false);
   syncRotation();
   queueCursor();
 }
-
-// ===== 对话框：逐字显示、按长度停留、统一取消旧台词 =====
 function clearSpeechTimers() {
   speechVersion++;
   clearTimeout(speechTimer);
@@ -582,9 +560,7 @@ function sayForPart(part) {
   previousLines[part] = line;
   showSpeech(line);
 }
-
-// ===== 连点彩蛋：图片突现 → 消失 → 停顿 → 解释 =====
-let encounterStage = 'fresh'; // fresh → warned → afterPrank → ended
+let encounterStage = 'fresh';
 const choices = document.querySelector('#bear-choices');
 const yesButton = document.querySelector('#choice-yes');
 const noButton = document.querySelector('#choice-no');
@@ -604,15 +580,9 @@ function startWarning() {
   syncRotation();
   updateCursor();
   playClip('CryWait', false);
-  showSpeech('Stop! Please be gentle.', {
-    persist:true,
-    onTyped: () => {
-      if (state !== 'warning') return;
-      state = 'choosing';
-      choices.hidden = false;
-      placeSpeech();
-    }
-  });
+  state = 'choosing';
+  choices.hidden = false;
+  showSpeech('Stop! Please be gentle.', {persist:true});
 }
 function chooseYes() {
   if (state !== 'choosing') return;
@@ -639,30 +609,43 @@ yesButton.addEventListener('click', chooseYes);
 noButton.addEventListener('click', chooseNo);
 
 function leaveForever() {
+  if (state === 'leaving' || state === 'ended') return;
   encounterStage = 'ended';
-  state = 'ended';
+  state = 'leaving';
   press = null;
   dragging = false;
   clickTimes = [];
   clearTimeout(prankTimer);
   clearTimeout(recoveryTimer);
   clearTimeout(idleTimer);
+  clearTimeout(endingTimer);
   prankTimer = recoveryTimer = idleTimer = null;
   closeChoices();
   hideSpeechNow();
   overlay.hidden = true;
   overlay.classList.remove('active');
-  bear.pause();
   syncRotation();
+  faceFront();
+  playClip('Angry');
   bear.cameraControls = false;
-  bear.style.visibility = 'hidden';
+  bear.style.cursor = 'default';
   bearSound.ended = true;
   bearSound.enabled = false;
   bearSound.scary = true;
   bearSound.silence();
-  document.body.classList.add('story-ended');
-  ending.hidden = false;
-  ending.textContent = '我不和不懂礼貌的人做朋友';
+  bearSound.button.hidden = true;
+  endingTimer = setTimeout(() => {
+    bear.classList.add('farewell-fade');
+    endingTimer = setTimeout(() => {
+      endingTimer = null;
+      state = 'ended';
+      bear.pause();
+      bear.style.visibility = 'hidden';
+      document.body.classList.add('story-ended');
+      ending.textContent = "I don't make friends with rude people.";
+      ending.hidden = false;
+    }, 900);
+  }, 750);
 }
 function handleRoughTouch() {
   clickTimes = [];
@@ -682,7 +665,6 @@ async function startPrank() {
   clearTimeout(idleTimer);
   syncRotation();
   updateCursor();
-  // 图片提前加载；若玩家很快选 No，则等图片就绪，不显示加载台词。
   if (!prankImage.complete || !prankImage.naturalWidth) {
     try {await prankImage.decode();} catch (_) {
       if (state === 'ended' || !ready) return;
@@ -748,8 +730,6 @@ function handleClick(event) {
   syncRotation();
   sayForPart(action.part);
 }
-
-// ===== 一个入口处理鼠标、点击、拖动，不再叠加多套监听 =====
 function onPointerDown(event) {
   if (!event.composedPath().includes(bear)) return;
   recordActivity();
@@ -765,7 +745,6 @@ function onPointerDown(event) {
     bear.style.cursor = 'default';
     return;
   }
-  // 必须从小熊身上开始才能拖动；按下时不归正，避免与手动拖动争抢。
   press = {id:event.pointerId, x:event.clientX, y:event.clientY, moved:false};
   dragging = true;
   if (event.pointerType === 'mouse') {
@@ -792,7 +771,6 @@ function onPointerMove(event) {
     return;
   }
   pointerPosition = {x:event.clientX, y:event.clientY};
-  // 按真实指针位移触发；摄像机动画及合成的静止 pointermove 不触发归正。
   const mouseMoved = !lastMousePosition ||
     event.clientX !== lastMousePosition.x || event.clientY !== lastMousePosition.y;
   lastMousePosition = pointerPosition;
@@ -889,7 +867,6 @@ if (bear.shadowRoot && !bear.shadowRoot.querySelector('#bear-cursor-fix')) {
   style.textContent = '* { cursor: inherit !important; }';
   bear.shadowRoot.appendChild(style);
 }
-// 兼容模型先于控制脚本完成加载的情况。
 if (bear.loaded && !ready) initializeBear();
 
 </script>
