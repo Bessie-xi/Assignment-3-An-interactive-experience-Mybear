@@ -6,76 +6,263 @@
   <title>MyBear</title>
   <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
   <style>
-    body { margin:0; min-height:100vh; min-height:100dvh; box-sizing:border-box; padding:24px 20px; display:flex; flex-direction:column; background:radial-gradient(ellipse at 75% 65%, #665650 0%, transparent 48%),linear-gradient(135deg,#303a44 0%,#46515b 48%,#25292c 100%); color:white; font-family:Arial,sans-serif; text-align:center; }
+    body { margin:0; min-height:100vh; min-height:100dvh; box-sizing:border-box; padding:24px 20px; display:flex; flex-direction:column; background-color:#faf2ef; background-image: url("../assets/pink-background.png"); background-position:center; background-size:cover; background-repeat:no-repeat; color:#73564e; font-family:Arial,sans-serif; text-align:center; }
     h1 { margin:0 0 16px; font-size:36px; }
     .workspace { flex:1; width:100%; display:flex; align-items:center; justify-content:center; }
     .preview { width:100%; max-width:1000px; }
     model-viewer { display:block; width:100%; height:calc(100vh - 120px); height:calc(100dvh - 120px); min-height:320px; background:transparent; touch-action:pan-y; }
-    #status { margin:0; font-size:14px; color:#e0ddd9; min-height:20px; }
-  </style>
+    #status { margin:0; font-size:14px; color:#80635b; min-height:20px; }
+  
+    h1, #status { display:none; }
+    model-viewer { height:calc(100vh - 48px); height:calc(100dvh - 48px); }
+    .speech-anchor { width:0; height:0; pointer-events:none; opacity:0; }
+    #speech { position:fixed; z-index:10; box-sizing:border-box; width:260px; max-width:calc(100vw - 32px); min-height:132px; padding:25px 25px 39px; color:#493c39; font-family:'Courier New',monospace; font-size:16px; font-weight:bold; line-height:1.5; text-align:left; overflow-wrap:anywhere; pointer-events:none; opacity:0; transition:opacity 250ms ease; }
+    #speech.visible { opacity:1; }
+    .speech-frame { position:absolute; inset:0; width:100%; height:100%; overflow:visible; filter:drop-shadow(4px 5px 0 rgba(115,86,78,.13)); }
+    #speech-text { position:relative; z-index:1; white-space:pre-wrap; }
+    #speech.tail-right .speech-frame { transform:scaleX(-1); }
+    @media (max-width:480px) { #speech { width:210px; font-size:14px; padding:23px 22px 35px; min-height:120px; } }
+    @media (prefers-reduced-motion:reduce) { #speech { transition:none; } }
+
+</style>
 </head>
 <body>
   <h1>MyBear</h1>
   <main class="workspace">
     <section class="preview">
       <model-viewer id="bear"
-        src="../assets/teddy_bear_interactive.glb"
-        alt="一只可以点击肚子、会眨眼和呼吸的玩具小熊"
+        src="../assets/teddy_bear_complete.glb"
+        alt="一只可以点击耳朵、鼻子、肚子、手和腿的互动玩具小熊"
         camera-controls disable-zoom disable-pan disable-tap
         auto-rotate autoplay animation-name="BearIdle"
         animation-crossfade-duration="70" shadow-intensity="1">
+        <span slot="hotspot-speech" class="speech-anchor" data-position="0.24m 0.36m 0m" data-normal="1m 0m 0m" aria-hidden="true"></span>
       </model-viewer>
       <p id="status" role="status" aria-live="polite">正在加载小熊…</p>
     </section>
   </main>
+  <div id="speech" role="status" aria-live="polite" aria-atomic="true" aria-hidden="true">
+    <svg class="speech-frame" viewBox="0 0 320 160" preserveAspectRatio="none" aria-hidden="true">
+      <path d="M24 4 H296 V12 H308 V24 H316 V116 H308 V128 H296 V136 H102 V144 H90 V156 H78 V144 H66 V136 H24 V128 H12 V116 H4 V24 H12 V12 H24 Z" fill="#fffdf9" stroke="#493c39" stroke-width="6" stroke-linejoin="miter"/>
+    </svg>
+    <span id="speech-text"></span>
+  </div>
   <script type="module">
-    const bear = document.querySelector('#bear');
-    const status = document.querySelector('#status');
-    let ready = false;
-    let press = null;
-    const hint = '点一下小熊的肚子，试试它有多 Q 弹';
+const bear = document.querySelector('#bear');
+const status = document.querySelector('#status');
+const hint = "";
+// 连点规则：任意连续 2 秒内，点击小熊达到 6 次。
+const CLICK_WINDOW_MS = 2000;
+const CRY_CLICK_COUNT = 6;
+const CRY_DURATION_MS = 5000;
+const actions = {
+ BellyTouch: { animation:'BellyBounce', message:'Duang～Duang～' },
+ EarLeftTouch: { animation:'EarLeftWiggle', message:'嘿嘿，痒痒的～' },
+ EarRightTouch: { animation:'EarRightWiggle', message:'嘿嘿，痒痒的～' },
+ NoseTouch: { animation:'Sneeze', message:'阿——嚏！' }
+};
+const requiredAnimations = ['BearIdle','BellyBounce','EarLeftWiggle','EarRightWiggle','Sneeze','HandLeftLift','HandRightLift','LegLeftShake','LegRightShake','Cry'];
+let ready = false;
+let state = 'loading';
+let press = null;
+let clickTimes = [];
+let cryTimer = null;
 
-    bear.addEventListener('load', () => {
-      ready = bear.availableAnimations.includes('BellyBounce');
-      status.textContent = ready ? hint : '请确认使用的是新的互动模型文件。';
-    });
-    bear.addEventListener('error', () => {
-      ready = false;
-      status.textContent = '小熊加载失败，请检查模型是否放在 assets 文件夹中。';
-    });
+function playClip(name, once = true) {
+ bear.pause();
+ bear.animationName = name;
+ bear.currentTime = 0;
+ bear.play(once ? {repetitions:1} : {});
+}
+function returnToIdle() {
+ if (cryTimer !== null) clearTimeout(cryTimer);
+ cryTimer = null;
+ clickTimes = [];
+ state = 'idle';
+ bear.autoRotate = true;
+ playClip('BearIdle', false);
+ status.textContent = hint;
+}
+function startCrying() {
+ state = 'crying';
+ showSpeech(CRY_LINE);
+ clickTimes = [];
+ bear.autoRotate = false;
+ playClip('Cry');
+ status.textContent = '呜呜……让我缓一缓，轻轻点我哦';
+ // finished 负责正常恢复；计时器作为动画结束事件未送达时的后备。
+ cryTimer = setTimeout(() => {
+   if (state === 'crying') returnToIdle();
+ }, CRY_DURATION_MS + 120);
+}
+bear.addEventListener('load', () => {
+ ready = requiredAnimations.every(name => bear.availableAnimations.includes(name));
+ if (ready) { returnToIdle(); showWelcome(); }
+ else {state = 'loading'; showSpeech('请换用 teddy_bear_complete.glb 完整版模型。');}
+});
+bear.addEventListener('error', () => {
+ ready = false;
+ if (cryTimer !== null) clearTimeout(cryTimer);
+ cryTimer = null; press = null; clickTimes = []; state = 'loading';
+ status.textContent = '小熊加载失败，请检查模型文件位置。';
+ showSpeech(status.textContent);
+});
+bear.addEventListener('pointerdown', event => {
+ if (!event.isPrimary) {press = null; return;}
+ if (event.button !== 0 || !ready || state === 'crying') return;
+ press = {id:event.pointerId,x:event.clientX,y:event.clientY,moved:false};
+});
+bear.addEventListener('pointermove', event => {
+ if (!press || event.pointerId !== press.id) return;
+ if (Math.hypot(event.clientX-press.x,event.clientY-press.y)>8) press.moved = true;
+});
+bear.addEventListener('pointercancel', () => {press = null;});
+window.addEventListener('blur', () => {press = null;});
+window.addEventListener('pointerup', event => {
+ const start = press; press = null;
+ if (!ready || state === 'crying' || !start || event.pointerId !== start.id || start.moved) return;
+ if (Math.hypot(event.clientX-start.x,event.clientY-start.y)>8) return;
+ const material = bear.materialFromPoint(event.clientX,event.clientY);
+ if (!material) return;
+ registerBearTouch();
+ // 点击背景不计数；旋转拖动也不计数。点击小熊任何部位都计数。
+ const now = performance.now();
+ clickTimes = clickTimes.filter(time => now-time <= CLICK_WINDOW_MS);
+ clickTimes.push(now);
+ if (clickTimes.length >= CRY_CLICK_COUNT) {startCrying(); return;}
+ let action = actions[material.name];
+ if (material.name === 'HandsTouch' || material.name === 'LegsTouch') {
+   const hit = bear.positionAndNormalFromPoint(event.clientX,event.clientY);
+   if (!hit) return;
+   // 模型的正前方为 X，左右为 Z；摄像机旋转不改变模型坐标。
+   const side = hit.position.z >= 0 ? 'Left' : 'Right';
+   action = material.name === 'HandsTouch'
+     ? {animation:`Hand${side}Lift`,message:'抬起来～慢慢放下～'}
+     : {animation:`Leg${side}Shake`,message:'晃晃小脚！'};
+ }
+ if (!action) return;
+ state = 'reacting';
+ playClip(action.animation);
+ status.textContent = action.message;
+ const part = {BellyTouch:'belly', EarLeftTouch:'ears', EarRightTouch:'ears', NoseTouch:'nose', HandsTouch:'hands', LegsTouch:'legs'}[material.name];
+ if (part) sayForPart(part);
+});
+bear.addEventListener('finished', () => {
+ if (state === 'crying') {
+   if (bear.animationName === 'Cry') returnToIdle();
+ } else if (state === 'reacting' && bear.animationName !== 'BearIdle') {
+   // 普通动作结束不清空连点记录，避免短动画绕过 2 秒计数。
+   state = 'idle';
+   playClip('BearIdle',false);
+   status.textContent = hint;
+ }
+});
 
-    // 记录按下位置；移动超过 8 像素就视为旋转，不触发互动。
-    bear.addEventListener('pointerdown', event => {
-      if (!event.isPrimary) { press = null; return; }
-      if (event.button !== 0 || !ready) return;
-      press = { id:event.pointerId, x:event.clientX, y:event.clientY, moved:false };
+// ===== 小熊台词：以后只修改引号里的文字即可 =====
+const BEAR_LINES = {
+  ears: ['E1', 'E2', 'E3'],
+  nose: ['N1', 'N2', 'N3'],
+  belly: ['B1', 'B2', 'B3'],
+  hands: ['H1', 'H2', 'H3'],
+  legs: ['L1', 'L2', 'L3']
+};
+const WELCOME_LINE = 'Hi, I am MyBear. Try to touch me!';
+const CRY_LINE = 'C1';
+const SPEECH_DURATION_MS = 5000;
+const WELCOME_GAP_MS = 5000;
+const FADE_MS = 250;
+const bubble = document.querySelector('#speech');
+const speechText = document.querySelector('#speech-text');
+let hasTouchedBear = false;
+let speechTimer = null;
+let welcomeTimer = null;
+let speechVisible = false;
+let speechFrame = null;
+function clearSpeechTimers() {
+  clearTimeout(speechTimer);
+  clearTimeout(welcomeTimer);
+  speechTimer = null;
+  welcomeTimer = null;
+}
+function placeSpeech() {
+  if (!speechVisible) return;
+  const rect = bear.getBoundingClientRect();
+  const hotspot = bear.queryHotspot('hotspot-speech');
+  const x = rect.left + (hotspot ? hotspot.canvasPosition.x : rect.width / 2);
+  const y = rect.top + (hotspot ? hotspot.canvasPosition.y : rect.height * .27);
+  const width = bubble.offsetWidth;
+  const height = bubble.offsetHeight;
+  let left = x + 180;
+  left = Math.max(16, Math.min(left, window.innerWidth - width - 16));
+  const top = Math.max(16, Math.min(y - height + 25, window.innerHeight - height - 20));
+  bubble.style.left = `${left}px`;
+  bubble.style.top = `${top}px`;
+  bubble.classList.toggle('tail-right', left + width / 2 < x);
+}
+function trackSpeech() {
+  speechFrame = null;
+  if (!speechVisible) return;
+  placeSpeech();
+  speechFrame = requestAnimationFrame(trackSpeech);
+}
+function showSpeech(text, afterFade) {
+  clearSpeechTimers();
+  speechText.textContent = text;
+  bubble.classList.add('visible');
+  bubble.setAttribute('aria-hidden', 'false');
+  speechVisible = true;
+  if (speechFrame === null) trackSpeech();
+  speechTimer = setTimeout(() => {
+    bubble.classList.remove('visible');
+    bubble.setAttribute('aria-hidden', 'true');
+    speechTimer = setTimeout(() => {
+      speechVisible = false;
+      if (speechFrame !== null) cancelAnimationFrame(speechFrame);
+      speechFrame = null;
+      if (afterFade) afterFade();
+    }, FADE_MS);
+  }, SPEECH_DURATION_MS);
+}
+let idleTimer = null;
+
+function resetIdleTimer() {
+  clearTimeout(idleTimer);
+  idleTimer = setTimeout(showWelcome, 5000);
+}
+
+function showWelcome() {
+  if (!ready) return;
+
+  // 哭泣期间先保留哭泣提示。
+  if (state === 'crying') {
+    idleTimer = setTimeout(showWelcome, 250);
+    return;
+  }
+
+  showSpeech(WELCOME_LINE, resetIdleTimer);
+}
+
+function registerBearTouch() {
+  resetIdleTimer();
+}
+
+// 鼠标、触摸、滚动或键盘操作后，重新计算无操作时间。
+['pointerdown', 'pointermove', 'wheel', 'keydown', 'scroll']
+  .forEach(eventName => {
+    window.addEventListener(eventName, resetIdleTimer, {
+      passive: true
     });
-    bear.addEventListener('pointermove', event => {
-      if (!press || event.pointerId !== press.id) return;
-      if (Math.hypot(event.clientX - press.x, event.clientY - press.y) > 8) press.moved = true;
-    });
-    bear.addEventListener('pointercancel', () => { press = null; });
-    window.addEventListener('pointerup', event => {
-      const start = press;
-      press = null;
-      if (!ready || !start || event.pointerId !== start.id || start.moved) return;
-      if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > 8) return;
-      const material = bear.materialFromPoint(event.clientX, event.clientY);
-      if (!material || material.name !== 'BellyTouch') return;
-      // 每次点击重新播放；从缩紧开始，再大、小各回弹一次。
-      bear.pause();
-      bear.animationName = 'BellyBounce';
-      bear.currentTime = 0;
-      bear.play({ repetitions:1 });
-      status.textContent = 'Duang～Duang～';
-    });
-    bear.addEventListener('finished', () => {
-      if (bear.animationName !== 'BellyBounce') return;
-      bear.animationName = 'BearIdle';
-      bear.currentTime = 0;
-      bear.play();
-      status.textContent = hint;
-    });
-  </script>
+  });
+const previousLines = {};
+function sayForPart(part) {
+  const lines = BEAR_LINES[part];
+  // 同一部位连续点击时，不重复刚刚说过的那一句。
+  const choices = lines.filter(line => line !== previousLines[part]);
+  const line = choices[Math.floor(Math.random() * choices.length)] || lines[0];
+  previousLines[part] = line;
+  showSpeech(line);
+}
+
+</script>
 </body>
 </html>
