@@ -4,7 +4,7 @@ MyBear is an interactive 3D teddy bear website for people who enjoy cute charact
 
 ## Play Online
 
-[\[Add the website link here\]](https://bessie-xi.github.io/Assignment-3-An-interactive-experience-Mybear/)
+[\[https://bessie-xi.github.io/Assignment-3-An-interactive-experience-Mybear/\]](https://bessie-xi.github.io/Assignment-3-An-interactive-experience-Mybear/)
 
 ## How to Play
 
@@ -48,7 +48,11 @@ http://localhost:8080
 
 ## Screenshot
 
-![MyBear website screenshot](./assets/screenshot.png)
+![MyBear screenshot](./assets/screenshot.png)
+
+## Demo Video
+
+[Watch the demo video](./assets/video.mp4)
 
 ## Credits
 
