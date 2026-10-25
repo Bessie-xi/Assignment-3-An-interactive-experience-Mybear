@@ -4,73 +4,78 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MyBear</title>
-
-  <script
-    type="module"
-    src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js">
-  </script>
-
+  <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
   <style>
-    body {
-      margin: 0;
-      min-height: 100vh;
-      min-height: 100dvh;
-      box-sizing: border-box;
-      padding: 24px 20px;
-      display: flex;
-      flex-direction: column;
-      background:
-        radial-gradient(ellipse at 75% 65%, #665650 0%, transparent 48%),
-        linear-gradient(135deg, #303a44 0%, #46515b 48%, #25292c 100%);
-      color: #ffffff;
-      font-family: Arial, sans-serif;
-      text-align: center;
-    }
-
-    h1 {
-      margin: 0 0 16px;
-      font-size: 36px;
-    }
-
-    .workspace {
-      flex: 1;
-      width: 100%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .preview {
-      width: 100%;
-      max-width: 1000px;
-    }
-
-    model-viewer {
-      display: block;
-      width: 100%;
-      height: calc(100vh - 120px);
-      height: calc(100dvh - 120px);
-      min-height: 320px;
-      background: transparent;
-    }
+    body { margin:0; min-height:100vh; min-height:100dvh; box-sizing:border-box; padding:24px 20px; display:flex; flex-direction:column; background:radial-gradient(ellipse at 75% 65%, #665650 0%, transparent 48%),linear-gradient(135deg,#303a44 0%,#46515b 48%,#25292c 100%); color:white; font-family:Arial,sans-serif; text-align:center; }
+    h1 { margin:0 0 16px; font-size:36px; }
+    .workspace { flex:1; width:100%; display:flex; align-items:center; justify-content:center; }
+    .preview { width:100%; max-width:1000px; }
+    model-viewer { display:block; width:100%; height:calc(100vh - 120px); height:calc(100dvh - 120px); min-height:320px; background:transparent; touch-action:pan-y; }
+    #status { margin:0; font-size:14px; color:#e0ddd9; min-height:20px; }
   </style>
 </head>
-
 <body>
   <h1>MyBear</h1>
-
   <main class="workspace">
     <section class="preview">
-     <model-viewer
-  src="../assets/teddy_bear.glb"
-  alt="一只可旋转查看的 3D 小熊"
-  camera-controls
-  disable-zoom
-  disable-pan
-  auto-rotate
-  shadow-intensity="1">
-</model-viewer>
+      <model-viewer id="bear"
+        src="../assets/teddy_bear_interactive.glb"
+        alt="一只可以点击肚子、会眨眼和呼吸的玩具小熊"
+        camera-controls disable-zoom disable-pan disable-tap
+        auto-rotate autoplay animation-name="BearIdle"
+        animation-crossfade-duration="70" shadow-intensity="1">
+      </model-viewer>
+      <p id="status" role="status" aria-live="polite">正在加载小熊…</p>
     </section>
   </main>
+  <script type="module">
+    const bear = document.querySelector('#bear');
+    const status = document.querySelector('#status');
+    let ready = false;
+    let press = null;
+    const hint = '点一下小熊的肚子，试试它有多 Q 弹';
+
+    bear.addEventListener('load', () => {
+      ready = bear.availableAnimations.includes('BellyBounce');
+      status.textContent = ready ? hint : '请确认使用的是新的互动模型文件。';
+    });
+    bear.addEventListener('error', () => {
+      ready = false;
+      status.textContent = '小熊加载失败，请检查模型是否放在 assets 文件夹中。';
+    });
+
+    // 记录按下位置；移动超过 8 像素就视为旋转，不触发互动。
+    bear.addEventListener('pointerdown', event => {
+      if (!event.isPrimary) { press = null; return; }
+      if (event.button !== 0 || !ready) return;
+      press = { id:event.pointerId, x:event.clientX, y:event.clientY, moved:false };
+    });
+    bear.addEventListener('pointermove', event => {
+      if (!press || event.pointerId !== press.id) return;
+      if (Math.hypot(event.clientX - press.x, event.clientY - press.y) > 8) press.moved = true;
+    });
+    bear.addEventListener('pointercancel', () => { press = null; });
+    window.addEventListener('pointerup', event => {
+      const start = press;
+      press = null;
+      if (!ready || !start || event.pointerId !== start.id || start.moved) return;
+      if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > 8) return;
+      const material = bear.materialFromPoint(event.clientX, event.clientY);
+      if (!material || material.name !== 'BellyTouch') return;
+      // 每次点击重新播放；从缩紧开始，再大、小各回弹一次。
+      bear.pause();
+      bear.animationName = 'BellyBounce';
+      bear.currentTime = 0;
+      bear.play({ repetitions:1 });
+      status.textContent = 'Duang～Duang～';
+    });
+    bear.addEventListener('finished', () => {
+      if (bear.animationName !== 'BellyBounce') return;
+      bear.animationName = 'BearIdle';
+      bear.currentTime = 0;
+      bear.play();
+      status.textContent = hint;
+    });
+  </script>
 </body>
 </html>
