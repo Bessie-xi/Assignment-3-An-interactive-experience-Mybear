@@ -303,7 +303,7 @@ class MyBearSound {
     oscillator.frequency.exponentialRampToValueAtTime(pitch * (.82 + Math.random() * .45), now + .065);
     filter.type = 'bandpass'; filter.frequency.value = 1500 + Math.random() * 700; filter.Q.value = .7;
     gain.gain.setValueAtTime(0, now);
-    gain.gain.linearRampToValueAtTime(.055, now + .008);
+    gain.gain.linearRampToValueAtTime(.30, now + .008);
     gain.gain.exponentialRampToValueAtTime(.0001, now + .07);
     oscillator.connect(filter).connect(gain).connect(context.destination);
     this.nodes.add(oscillator);
