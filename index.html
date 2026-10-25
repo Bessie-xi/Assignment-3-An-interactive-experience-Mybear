@@ -4,6 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MyBear</title>
+  <link rel="preload" as="audio" href="./assets/mybear-piano.mp3" type="audio/mpeg">
+  <link rel="preload" as="audio" href="./assets/mybear-no.mp3" type="audio/mpeg">
   <script
   type="module"
   src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js">
@@ -111,9 +113,28 @@ top: -100px;
     animation: none;
   }
 }
+
+#sound-toggle {
+  position:fixed; right:20px; bottom:20px; z-index:30;
+  width:42px; height:42px; padding:0; border:2px solid #73564e;
+  background:#fffaf3; color:#73564e; font-size:24px; cursor:pointer;
+  box-shadow:3px 3px 0 #d5bcb3;
+}
+#sound-toggle.muted { opacity:.65; }
+#sound-toggle:focus-visible { outline:3px solid #ae7777; outline-offset:4px; }
+
+#bear-choices { display:flex; gap:12px; margin:16px 0 0; pointer-events:auto; }
+#bear-choices[hidden], #ending[hidden] { display:none; }
+#bear-choices button { flex:1; min-height:40px; border:2px solid #493c39; background:#fff3ec; color:#493c39; box-shadow:3px 3px 0 #d5bcb3; padding:8px 12px; font:bold 16px 'Courier New',monospace; cursor:pointer; }
+#bear-choices button:hover { background:#f2d7cc; }
+#bear-choices button:active { translate:2px 2px; box-shadow:1px 1px 0 #d5bcb3; }
+#bear-choices button:focus-visible { outline:3px solid #ae7777; outline-offset:3px; }
+#ending { position:fixed; inset:0; display:grid; place-items:center; padding:32px; text-align:center; font:700 clamp(18px,3vw,30px)/1.8 'Courier New',monospace; color:#493c39; }
+body.story-ended .workspace, body.story-ended #speech, body.story-ended #sound-toggle, body.story-ended #prank { display:none !important; }
 </style>
 </head>
 <body>
+  <button id="sound-toggle" type="button" aria-label="开启声音" aria-pressed="false" title="开启声音">♪</button>
   <div id="prank" hidden aria-hidden="true">
   <img
     id="prank-image"
@@ -142,7 +163,12 @@ top: -100px;
       <path d="M24 4 H296 V12 H308 V24 H316 V116 H308 V128 H296 V136 H102 V144 H90 V156 H78 V144 H66 V136 H24 V128 H12 V116 H4 V24 H12 V12 H24 Z" fill="#fffdf9" stroke="#493c39" stroke-width="6" stroke-linejoin="miter"/>
     </svg>
     <span id="speech-text"></span>
+    <div id="bear-choices" hidden role="group" aria-label="Will you be gentle?">
+      <button id="choice-yes" type="button">Yes</button>
+      <button id="choice-no" type="button">No</button>
+    </div>
   </div>
+  <div id="ending" hidden role="status" aria-live="polite"></div>
   <script type="module">
 const bear = document.querySelector('#bear');
 const status = document.querySelector('#status');
@@ -150,6 +176,168 @@ const bubble = document.querySelector('#speech');
 const speechText = document.querySelector('#speech-text');
 const overlay = document.querySelector('#prank');
 const prankImage = document.querySelector('#prank-image');
+
+// ===== 声音：钢琴背景、触碰 duang、逐字碎碎念、暗黑 NO =====
+class MyBearSound {
+  constructor() {
+    this.music = new Audio('./assets/mybear-piano.mp3');
+    this.music.loop = true;
+    this.music.preload = 'auto';
+    this.music.volume = 0.23;
+    this.no = new Audio('./assets/mybear-no.mp3');
+    this.no.preload = 'auto';
+    this.no.volume = 0.75;
+    this.no.preservesPitch = true;
+    this.enabled = true;
+    this.ended = false;
+    this.unlocked = false;
+    this.scary = false;
+    this.context = null;
+    this.nodes = new Set();
+    this.lastBabble = -Infinity;
+    this.button = document.querySelector('#sound-toggle');
+    this.button.addEventListener('click', () => {
+      if (this.ended) return;
+      if (!this.unlocked) {
+        this.enabled = true;
+        this.unlock();
+      } else {
+        this.enabled = !this.enabled;
+        if (this.enabled) this.unlock();
+        else this.silence();
+      }
+      this.updateButton();
+    });
+    const unlock = event => {
+      if (event.composedPath().includes(this.button)) return;
+      if (event.type === 'keydown' && event.repeat) return;
+      if (!this.unlocked || this.context?.state === 'suspended') this.unlock();
+    };
+    window.addEventListener('pointerdown', unlock, {capture:true});
+    window.addEventListener('keydown', unlock, {capture:true});
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) this.silence();
+      else if (this.enabled && this.unlocked && !this.scary) this.playMusic();
+    });
+    this.updateButton();
+  }
+  unlock() {
+    if (this.ended) return;
+    this.unlocked = true;
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!this.context && AudioContextClass) this.context = new AudioContextClass();
+    if (this.enabled && this.context?.state === 'suspended') this.context.resume().catch(() => {});
+    // 在用户手势内解锁嘶吼播放器，移动端之后也能使用。
+    if (this.enabled && !this.scary) {
+      this.no.muted = true;
+      const playback = this.no.play();
+      if (playback) playback.then(() => {
+        // 不干扰稍后已经触发的 NO。
+        if (!this.scary) {this.no.pause(); this.no.currentTime = 0;}
+        this.no.muted = !this.enabled;
+      }).catch(() => {this.no.muted = !this.enabled;});
+      this.playMusic();
+    }
+    this.updateButton();
+  }
+  updateButton() {
+    const on = this.enabled && this.unlocked;
+    this.button.textContent = on ? '♫' : '♪';
+    this.button.setAttribute('aria-label', on ? '关闭声音' : '开启声音');
+    this.button.setAttribute('aria-pressed', String(on));
+    this.button.title = on ? '关闭声音' : '开启声音';
+    this.button.classList.toggle('muted', !on);
+  }
+  playMusic() {
+    if (this.ended) return;
+    if (!this.enabled || !this.unlocked || this.scary || document.hidden) return;
+    this.music.play().catch(() => {});
+  }
+  stopSmallSounds() {
+    for (const node of this.nodes) {
+      try {node.stop();} catch (_) {}
+    }
+    this.nodes.clear();
+  }
+  silence() {
+    this.music.pause();
+    this.no.pause();
+    this.stopSmallSounds();
+  }
+  canPlay() {
+    if (this.ended) return false;
+    return this.enabled && this.unlocked && !this.scary &&
+      !document.hidden && this.context?.state === 'running';
+  }
+  track(node) {
+    this.nodes.add(node);
+    node.onended = () => {this.nodes.delete(node); node.disconnect();};
+  }
+  touch(part) {
+    if (!this.canPlay()) return;
+    const context = this.context, now = context.currentTime;
+    const pitches = {head:340, ears:620, nose:480, belly:180, hands:390, legs:250};
+    const pitch = pitches[part] || 330;
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    oscillator.type = 'sine';
+    oscillator.frequency.setValueAtTime(pitch * 1.7, now);
+    oscillator.frequency.exponentialRampToValueAtTime(pitch * .62, now + .075);
+    oscillator.frequency.exponentialRampToValueAtTime(pitch * 1.1, now + .15);
+    oscillator.frequency.exponentialRampToValueAtTime(pitch * .72, now + .31);
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(.12, now + .006);
+    gain.gain.exponentialRampToValueAtTime(.001, now + .38);
+    oscillator.connect(gain).connect(context.destination);
+    oscillator.onended = () => {this.nodes.delete(oscillator); oscillator.disconnect(); gain.disconnect();};
+    this.nodes.add(oscillator);
+    oscillator.start(now); oscillator.stop(now + .4);
+  }
+  babble(character) {
+    if (!this.canPlay() || !/[\p{L}\p{N}]/u.test(character)) return;
+    const context = this.context, now = context.currentTime;
+    if (now - this.lastBabble < .075) return;
+    this.lastBabble = now;
+    const oscillator = context.createOscillator();
+    const filter = context.createBiquadFilter();
+    const gain = context.createGain();
+    const pitch = 440 + Math.random() * 260;
+    oscillator.type = 'triangle';
+    oscillator.frequency.setValueAtTime(pitch, now);
+    oscillator.frequency.exponentialRampToValueAtTime(pitch * (.82 + Math.random() * .45), now + .065);
+    filter.type = 'bandpass'; filter.frequency.value = 1500 + Math.random() * 700; filter.Q.value = .7;
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(.055, now + .008);
+    gain.gain.exponentialRampToValueAtTime(.0001, now + .07);
+    oscillator.connect(filter).connect(gain).connect(context.destination);
+    this.nodes.add(oscillator);
+    oscillator.onended = () => {this.nodes.delete(oscillator); oscillator.disconnect(); filter.disconnect(); gain.disconnect();};
+    oscillator.start(now); oscillator.stop(now + .075);
+  }
+  enterPrank(durationMs) {
+    this.scary = true;
+    this.music.pause();
+    this.stopSmallSounds();
+    this.no.pause(); this.no.currentTime = 0;
+    if (!this.enabled || !this.unlocked || document.hidden) return;
+    this.no.muted = false;
+    // 保持音高，将短促的 NO 放进图片停留的时间里。
+    const duration = Number.isFinite(this.no.duration) ? this.no.duration : 1.44;
+    this.no.playbackRate = Math.max(1, Math.min(3, duration / Math.max(.3, durationMs / 1000)));
+    this.no.play().catch(() => {});
+  }
+  leavePrank() {
+    // 图片消失后仍留出安静的停顿。
+    this.no.pause(); this.no.currentTime = 0;
+  }
+  finishRecovery() {
+    if (this.ended) return;
+    this.scary = false;
+    this.playMusic();
+  }
+}
+const bearSound = new MyBearSound();
+
 
 // ===== 可调整的设置 =====
 const CLICK_WINDOW_MS = 2000;
@@ -207,7 +395,7 @@ const clickableParts = new Set([
   ...Object.keys(actions), 'HandsTouch', 'LegsTouch'
 ]);
 const requiredAnimations = [
-  'BearIdle', 'HeadBounce', 'BellyBounce', 'EarLeftWiggle', 'EarRightWiggle',
+  'CryWait', 'ThankYou', 'BearIdle', 'HeadBounce', 'BellyBounce', 'EarLeftWiggle', 'EarRightWiggle',
   'Sneeze', 'HandLeftLift', 'HandRightLift', 'LegLeftShake', 'LegRightShake'
 ];
 let ready = false;
@@ -234,7 +422,7 @@ let cursorFrame = null;
 let lastMousePosition = null;
 
 function isBlocked() {
-  return !ready || state === 'prank' || state === 'recovering';
+  return !ready || ['warning','choosing','thanking','preparingPrank','prank','recovering','ended'].includes(state);
 }
 function hitMaterial(x, y) {
   if (!ready) return null;
@@ -276,6 +464,7 @@ function playClip(name, once = true) {
   bear.play(once ? {repetitions:1} : {});
 }
 function returnToIdle() {
+  if (state === 'ended') return;
   state = 'idle';
   playClip('BearIdle', false);
   syncRotation();
@@ -318,7 +507,7 @@ function trackSpeech() {
   placeSpeech();
   speechFrame = requestAnimationFrame(trackSpeech);
 }
-function showSpeech(text) {
+function showSpeech(text, {persist = false, onTyped = null, onHidden = null} = {}) {
   clearSpeechTimers();
   clearTimeout(idleTimer);
   idleTimer = null;
@@ -339,6 +528,8 @@ function showSpeech(text) {
   function finishSpeaking() {
     if (version !== speechVersion) return;
     typingTimer = null;
+    if (onTyped) onTyped();
+    if (persist) return;
     const readingTime = Math.min(8000, Math.max(2000, characters.length * 55));
     speechTimer = setTimeout(() => {
       if (version !== speechVersion) return;
@@ -350,6 +541,7 @@ function showSpeech(text) {
         speechVisible = false;
         if (speechFrame !== null) cancelAnimationFrame(speechFrame);
         speechFrame = null;
+        if (onHidden) onHidden();
         scheduleWelcome(true);
       }, FADE_MS);
     }, readingTime);
@@ -357,7 +549,9 @@ function showSpeech(text) {
   function typeNextCharacter() {
     if (version !== speechVersion) return;
     if (index >= characters.length) {finishSpeaking(); return;}
-    speechText.textContent += characters[index++];
+    const character = characters[index++];
+    speechText.textContent += character;
+    bearSound.babble(character);
     typingTimer = setTimeout(typeNextCharacter, TYPING_SPEED_MS);
   }
   typeNextCharacter();
@@ -390,19 +584,120 @@ function sayForPart(part) {
 }
 
 // ===== 连点彩蛋：图片突现 → 消失 → 停顿 → 解释 =====
-function startPrank() {
+let encounterStage = 'fresh'; // fresh → warned → afterPrank → ended
+const choices = document.querySelector('#bear-choices');
+const yesButton = document.querySelector('#choice-yes');
+const noButton = document.querySelector('#choice-no');
+const ending = document.querySelector('#ending');
+
+function closeChoices() {
+  choices.hidden = true;
+}
+function startWarning() {
+  encounterStage = 'warned';
+  state = 'warning';
+  press = null;
+  dragging = false;
   clickTimes = [];
-  if (!prankImage.complete || !prankImage.naturalWidth) {
-    showSpeech("Oops, the picture isn't ready yet.");
-    return;
-  }
+  clearTimeout(idleTimer);
+  closeChoices();
+  syncRotation();
+  updateCursor();
+  playClip('CryWait', false);
+  showSpeech('Stop! Please be gentle.', {
+    persist:true,
+    onTyped: () => {
+      if (state !== 'warning') return;
+      state = 'choosing';
+      choices.hidden = false;
+      placeSpeech();
+    }
+  });
+}
+function chooseYes() {
+  if (state !== 'choosing') return;
+  closeChoices();
+  clickTimes = [];
+  state = 'thanking';
+  playClip('ThankYou');
+  syncRotation();
+  showSpeech('Thank u!', {
+    onHidden: () => {
+      if (state !== 'thanking') return;
+      returnToIdle();
+      lastActivity = performance.now();
+      scheduleWelcome();
+    }
+  });
+}
+function chooseNo() {
+  if (state !== 'choosing') return;
+  closeChoices();
+  startPrank();
+}
+yesButton.addEventListener('click', chooseYes);
+noButton.addEventListener('click', chooseNo);
+
+function leaveForever() {
+  encounterStage = 'ended';
+  state = 'ended';
+  press = null;
+  dragging = false;
+  clickTimes = [];
   clearTimeout(prankTimer);
   clearTimeout(recoveryTimer);
   clearTimeout(idleTimer);
-  idleTimer = null;
-  state = 'prank';
+  prankTimer = recoveryTimer = idleTimer = null;
+  closeChoices();
+  hideSpeechNow();
+  overlay.hidden = true;
+  overlay.classList.remove('active');
+  bear.pause();
+  syncRotation();
+  bear.cameraControls = false;
+  bear.style.visibility = 'hidden';
+  bearSound.ended = true;
+  bearSound.enabled = false;
+  bearSound.scary = true;
+  bearSound.silence();
+  document.body.classList.add('story-ended');
+  ending.hidden = false;
+  ending.textContent = '我不和不懂礼貌的人做朋友';
+}
+function handleRoughTouch() {
+  clickTimes = [];
+  if (encounterStage === 'fresh') startWarning();
+  else if (encounterStage === 'warned') startPrank();
+  else if (encounterStage === 'afterPrank') leaveForever();
+}
+
+async function startPrank() {
+  if (state === 'preparingPrank' || state === 'prank' ||
+      state === 'recovering' || encounterStage === 'ended') return;
+  clickTimes = [];
   press = null;
   dragging = false;
+  state = 'preparingPrank';
+  closeChoices();
+  clearTimeout(idleTimer);
+  syncRotation();
+  updateCursor();
+  // 图片提前加载；若玩家很快选 No，则等图片就绪，不显示加载台词。
+  if (!prankImage.complete || !prankImage.naturalWidth) {
+    try {await prankImage.decode();} catch (_) {
+      if (state === 'ended' || !ready) return;
+      returnToIdle();
+      hideSpeechNow();
+      scheduleWelcome();
+      return;
+    }
+  }
+  if (!ready || state === 'ended') return;
+  encounterStage = 'afterPrank';
+  clearTimeout(prankTimer);
+  clearTimeout(recoveryTimer);
+  state = 'prank';
+  bearSound.enterPrank(PRANK_DURATION_MS);
   bear.pause();
   syncRotation();
   updateCursor();
@@ -411,19 +706,24 @@ function startPrank() {
   overlay.classList.add('active');
   prankTimer = setTimeout(() => {
     prankTimer = null;
+    if (state !== 'prank') return;
     overlay.hidden = true;
     overlay.classList.remove('active');
+    bearSound.leavePrank();
     state = 'recovering';
     playClip('BearIdle', false);
     syncRotation();
     recoveryTimer = setTimeout(() => {
       recoveryTimer = null;
+      if (state !== 'recovering') return;
       returnToIdle();
       lastActivity = performance.now();
+      bearSound.finishRecovery();
       showSpeech(EXPLANATION_LINE);
     }, EXPLANATION_DELAY_MS);
   }, PRANK_DURATION_MS);
 }
+
 function handleClick(event) {
   const material = hitMaterial(event.clientX, event.clientY);
   if (!material) return;
@@ -431,7 +731,7 @@ function handleClick(event) {
   const now = performance.now();
   clickTimes = clickTimes.filter(time => now - time <= CLICK_WINDOW_MS);
   clickTimes.push(now);
-  if (clickTimes.length >= PRANK_CLICK_COUNT) {startPrank(); return;}
+  if (clickTimes.length >= PRANK_CLICK_COUNT) {handleRoughTouch(); return;}
   let action = actions[material.name];
   if (material.name === 'HandsTouch' || material.name === 'LegsTouch') {
     const hit = bear.positionAndNormalFromPoint(event.clientX, event.clientY);
@@ -444,6 +744,7 @@ function handleClick(event) {
   if (!action) return;
   state = 'reacting';
   playClip(action.animation);
+  bearSound.touch(action.part);
   syncRotation();
   sayForPart(action.part);
 }
@@ -544,9 +845,11 @@ for (const name of ['wheel', 'keydown', 'scroll']) {
 bear.addEventListener('camera-change', queueCursor);
 bear.addEventListener('finished', () => {
   if (state === 'reacting' && bear.animationName !== 'BearIdle') returnToIdle();
+  else if (state === 'thanking' && bear.animationName === 'ThankYou') playClip('BearIdle', false);
 });
 
 function initializeBear() {
+  if (state === 'ended') return;
   ready = requiredAnimations.every(name => bear.availableAnimations.includes(name));
   clickTimes = [];
   if (!ready) {
@@ -560,6 +863,8 @@ function initializeBear() {
 }
 bear.addEventListener('load', initializeBear);
 bear.addEventListener('error', () => {
+  if (state === 'ended') return;
+  closeChoices();
   ready = false;
   state = 'loading';
   press = null;
@@ -572,6 +877,7 @@ bear.addEventListener('error', () => {
   overlay.classList.remove('active');
   syncRotation();
   updateCursor();
+  bearSound.finishRecovery();
   showSpeech('小熊加载失败，请检查模型文件位置。');
 });
 
