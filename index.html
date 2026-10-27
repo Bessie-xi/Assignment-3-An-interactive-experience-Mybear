@@ -282,7 +282,7 @@ class MyBearSound {
     oscillator.frequency.exponentialRampToValueAtTime(pitch * 1.1, now + .15);
     oscillator.frequency.exponentialRampToValueAtTime(pitch * .72, now + .31);
     gain.gain.setValueAtTime(0, now);
-    gain.gain.linearRampToValueAtTime(.42, now + .006);
+    gain.gain.linearRampToValueAtTime(.82, now + .006);
     gain.gain.exponentialRampToValueAtTime(.001, now + .38);
     oscillator.connect(gain).connect(context.destination);
     oscillator.onended = () => {this.nodes.delete(oscillator); oscillator.disconnect(); gain.disconnect();};
